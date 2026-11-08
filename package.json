@@ -1,0 +1,32 @@
+{
+  "name": "formvault",
+  "description": "Turn your scattered history into one private vault, then fill hackathon and application forms from it.",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt -b firefox --mv3",
+    "dev:chrome": "wxt",
+    "build": "wxt build -b firefox --mv3",
+    "build:chrome": "wxt build",
+    "build:edge": "wxt build -b edge",
+    "zip": "wxt zip -b firefox --mv3",
+    "zip:chrome": "wxt zip",
+    "compile": "tsc --noEmit",
+    "postinstall": "wxt prepare"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@wxt-dev/module-react": "^1.2.2",
+    "typescript": "5.9",
+    "wxt": "^0.21.5"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "pdfjs-dist": "5.4",
+    "react": "19.2",
+    "react-dom": "19.2"
+  }
+}
