@@ -12,9 +12,11 @@ FormVault is a free, open-source browser extension for students. You connect you
 
 | | |
 | --- | --- |
-| **Import once** | Paste box · LinkedIn data export · ChatGPT, Claude and Gemini exports · resume PDF or linked Google Doc · GitHub username · Devpost profile · certificate PDFs and photos |
-| **Inbox** | Every find is a proposal. Duplicates are merged, so three chats about one hackathon become one entry. Nothing enters the vault until you approve it. |
-| **Stays up to date** | GitHub, Devpost and a linked resume re-sync once a day. "Add to vault?" chips appear on LinkedIn, AI chats, Gmail and Outlook. You can also select text on any page and right-click → *Add to FormVault*. |
+| **Quick add** | One box for everything. Drop files (several at once), paste text, paste a screenshot with Ctrl+V, or paste a link. FormVault works out what each thing is: resume, certificate, LinkedIn or chat export, GitHub or Devpost profile, Google Doc, or any public page. Files you already imported are skipped so they don't use your AI quota twice. |
+| **Reads images for free** | Screenshots, certificate photos, posters and scanned PDFs are read with OCR **on your computer** (Tesseract, bundled, works offline). Only the recognised text goes to the AI, with your contact details removed. The image itself is sent only if OCR finds almost nothing, for example on a very stylised certificate. |
+| **Import once** | LinkedIn data export · ChatGPT, Claude and Gemini exports · resume (PDF, Word or scanned) or linked Google Doc · GitHub username · Devpost profile · certificate PDFs and photos |
+| **Inbox** | Every find is a proposal. Duplicates are merged, so three chats about one hackathon become one entry. Nothing enters the vault until you approve it, and every approve or dismiss can be undone. |
+| **Stays up to date** | GitHub, Devpost and a linked resume re-sync once a day. "Add to vault?" chips appear on LinkedIn, AI chats, Gmail and Outlook. You can also select text on any page, or right-click any image, and choose *Add to FormVault*. The toolbar icon shows how many finds are waiting. |
 | **Fill** | Works on normal forms, Google Forms, forms inside iframes, ARIA widgets (Typeform-style) and React sites. Profile fields are filled locally. Everything else is drafted in **one** AI call. Each draft shows its source: *From vault: Project X*, *Your approved answer from …*, or *Not in your vault*. |
 | **Answer memory** | Approved answers are matched by meaning (embeddings) and adapted to new word limits. Questions like "Which project are you proudest of?" show cards to pick from. "List your hackathons" shows a ticked checklist. |
 | **Privacy** | Emails, phone numbers, ID numbers and your name are stripped before any text goes to the AI. FormVault reads a page only after you click its icon, and it never presses Submit. |
@@ -58,7 +60,7 @@ npm run zip       # Firefox zip + sources zip for AMO
 npm run zip:chrome
 ```
 
-Stack: [WXT](https://wxt.dev) (Manifest V3), React and TypeScript. One codebase builds for Firefox, Chrome, Edge and Brave.
+Stack: [WXT](https://wxt.dev) (Manifest V3), React and TypeScript. One codebase builds for Firefox, Chrome, Edge and Brave. OCR uses [Tesseract.js](https://github.com/naptha/tesseract.js); its WebAssembly engine and English data (about 7 MB) are copied into the build from `node_modules`, so nothing is downloaded at run time.
 
 ```
 src/
@@ -68,8 +70,8 @@ src/
     capture.content.ts   "Add to vault?" chips
     sidepanel/ welcome/  the UI
   lib/
-    ai/                  providers (Gemini, OpenAI, Claude, on-device) and prompts
-    import/              LinkedIn, chats, resume, GitHub, Devpost, extraction
+    ai/                  providers (Gemini, OpenAI, Claude, on-device), prompts, rate-limit retry
+    import/              Quick-add router, OCR, images, links, LinkedIn, chats, resume, GitHub, Devpost
     fill/                profile matching, answer memory, picks, one-call drafting, learning
     inbox.ts             proposals, duplicate merging
     backup.ts drive.ts   export/import (AES-GCM) and Google Drive app-folder sync
