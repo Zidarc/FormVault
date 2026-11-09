@@ -13,7 +13,9 @@ export default defineBackground(() => {
 
   browser.runtime.onInstalled.addListener(async ({ reason }) => {
     if (reason === 'install') await browser.tabs.create({ url: browser.runtime.getURL('/welcome.html') });
+    await browser.contextMenus.removeAll(); // updates keep old menus around
     browser.contextMenus.create({ id: 'fv-add', title: 'Add to FormVault', contexts: ['selection'] });
+    browser.contextMenus.create({ id: 'fv-add-image', title: 'Add image to FormVault', contexts: ['image'] });
     browser.alarms.create(SYNC_ALARM, { periodInMinutes: 24 * 60, delayInMinutes: 5 });
   });
 
@@ -28,8 +30,47 @@ export default defineBackground(() => {
       .catch(() => browser.storage.session.set({ scanRequest: { tabId: tab.id, at: Date.now(), blocked: true } }));
   });
 
+  function openPanel(tabId?: number) {
+    if (isFirefox) (browser as any).sidebarAction.open();
+    else if (tabId != null) (browser as any).sidePanel?.open({ tabId });
+  }
+
+  // Right-click an image → "Add image to FormVault". Instead of asking for access to the image's site,
+  // grab what's on screen (allowed by the click) and crop to the image. The panel then OCRs it.
+  async function captureImage(info: Browser.contextMenus.OnClickData, tab?: Browser.tabs.Tab) {
+    const src = info.srcUrl ?? '';
+    const name = decodeURIComponent(src.split(/[?#]/)[0].split('/').pop() || '') || 'image';
+    const base = { name: /.w{3,4}$/.test(name) ? name : name + '.png', pageUrl: tab?.url, pageTitle: tab?.title, at: Date.now() };
+    try {
+      if (src.startsWith('data:image/')) return void (await browser.storage.session.set({ pendingImage: { ...base, dataUrl: src } }));
+      let rect = null;
+      if (tab?.id != null && !info.frameId) {
+        const [res] = await browser.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: (s: string) => {
+            const img = [...document.images].find((i) => i.currentSrc === s || i.src === s);
+            if (!img) return null;
+            const r = img.getBoundingClientRect();
+            return { x: r.left, y: r.top, w: r.width, h: r.height, dpr: devicePixelRatio };
+          },
+          args: [src],
+        });
+        rect = res?.result ?? null;
+      }
+      const dataUrl = await browser.tabs.captureVisibleTab(tab!.windowId!, { format: 'png' });
+      await browser.storage.session.set({ pendingImage: { ...base, dataUrl, rect } });
+    } catch (e) {
+      console.warn('[FormVault] image capture failed', e);
+      await notify("Couldn't grab that image. Right-click → Save image, then drop it into Import → Quick add.");
+    }
+  }
+
   // Right-click → "Add to FormVault"
   browser.contextMenus.onClicked.addListener(async (info, tab) => {
+    if (info.menuItemId === 'fv-add-image') {
+      openPanel(tab?.id); // must stay synchronous inside the click
+      return captureImage(info, tab);
+    }
     if (info.menuItemId !== 'fv-add' || !info.selectionText) return;
     try {
       const n = await importPasted(info.selectionText, undefined, 'page', `Selected on ${tab?.title ?? 'a page'}`, tab?.url);

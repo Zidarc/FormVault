@@ -168,3 +168,37 @@ export function filesFrom(dt: DataTransfer | null): File[] {
     f.name && f.name !== 'image.png' ? f : new File([f], `Screenshot ${new Date().toLocaleTimeString()}${i ? ` (${i + 1})` : ''}.png`, { type: f.type || 'image/png' }),
   );
 }
+
+interface PendingImage {
+  name: string;
+  dataUrl: string;
+  rect?: { x: number; y: number; w: number; h: number; dpr: number } | null;
+  pageUrl?: string;
+  at: number;
+}
+
+/** Turn a right-click capture (a screenshot plus where the image sat) into a file for the queue. */
+export async function pendingImageToFile(p: PendingImage): Promise<File> {
+  const blob = await (await fetch(p.dataUrl)).blob();
+  const r = p.rect;
+  if (!r || r.w < 8 || r.h < 8) return new File([blob], p.name, { type: blob.type || 'image/png' });
+  const bmp = await createImageBitmap(blob);
+  const sx = Math.max(0, Math.round(r.x * r.dpr));
+  const sy = Math.max(0, Math.round(r.y * r.dpr));
+  const sw = Math.min(bmp.width - sx, Math.round(r.w * r.dpr));
+  const sh = Math.min(bmp.height - sy, Math.round(r.h * r.dpr));
+  if (sw < 8 || sh < 8) return new File([blob], p.name, { type: 'image/png' });
+  const c = new OffscreenCanvas(sw, sh);
+  c.getContext('2d')!.drawImage(bmp, sx, sy, sw, sh, 0, 0, sw, sh);
+  const out = await c.convertToBlob({ type: 'image/png' });
+  return new File([out], p.name.replace(/\.\w+$/, '') + '.png', { type: 'image/png' });
+}
+
+/** Pick up an image sent from the right-click menu, if there is a fresh one. */
+export async function takePendingImage(): Promise<File | null> {
+  const { pendingImage: p } = (await browser.storage.session.get('pendingImage')) as { pendingImage?: PendingImage };
+  if (!p) return null;
+  await browser.storage.session.remove('pendingImage');
+  if (Date.now() - p.at > 60_000) return null;
+  return pendingImageToFile(p);
+}

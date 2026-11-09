@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AccessBanner } from './AccessBanner';
 import { useSettings, useVault } from './hooks';
-import { enqueueFiles, filesFrom } from './queue';
+import { enqueueFiles, filesFrom, takePendingImage } from './queue';
 import { FillView } from './views/FillView';
 import { ImportView } from './views/ImportView';
 import { InboxView } from './views/InboxView';
@@ -52,6 +52,22 @@ export function App() {
     };
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);
+  }, []);
+
+  // Images sent from the right-click menu (the panel may only just be opening, so check on start too).
+  useEffect(() => {
+    const take = () =>
+      takePendingImage()
+        .then((f) => {
+          if (!f) return;
+          enqueueFiles([f]);
+          setTab('import');
+        })
+        .catch((e) => console.warn('[FormVault] could not read the captured image', e));
+    take();
+    const l = (c: Record<string, unknown>, area: string) => area === 'session' && (c as any).pendingImage?.newValue && take();
+    browser.storage.onChanged.addListener(l);
+    return () => browser.storage.onChanged.removeListener(l);
   }, []);
 
   useEffect(() => {
