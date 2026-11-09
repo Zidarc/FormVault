@@ -113,6 +113,20 @@ export default defineBackground(() => {
   async function notify(text: string) {
     await browser.storage.session.set({ toast: { text, at: Date.now() } });
     browser.action.setBadgeText({ text: '•' });
-    setTimeout(() => browser.action.setBadgeText({ text: '' }), 4000);
+    setTimeout(showInboxCount, 4000);
   }
+
+  // The toolbar icon shows how many finds are waiting in the Inbox.
+  async function showInboxCount() {
+    const { vault } = (await browser.storage.local.get('vault')) as { vault?: { inbox?: unknown[] } };
+    const n = vault?.inbox?.length ?? 0;
+    await browser.action.setBadgeText({ text: n ? String(Math.min(n, 99)) : '' });
+    await browser.action.setBadgeBackgroundColor({ color: '#4f46e5' });
+    await browser.action.setTitle({ title: n ? `FormVault — fill this form (${n} in your Inbox)` : 'FormVault — fill this form' });
+  }
+  browser.storage.onChanged.addListener((c, area) => {
+    if (area === 'local' && 'vault' in c) void showInboxCount();
+  });
+  browser.runtime.onStartup.addListener(() => void showInboxCount());
+  void showInboxCount();
 });
