@@ -176,6 +176,7 @@ export interface Settings {
   resumeDocHash?: string;
   lastSync?: { github?: string; devpost?: string; resumeDoc?: string };
   driveClientId?: string;
+  driveConnected?: boolean;
   driveLastSync?: string;
   chipsEnabled: boolean;
   onboarded: boolean;

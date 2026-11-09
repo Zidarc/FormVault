@@ -15,6 +15,7 @@ export default defineConfig({
       'scripting',
       'contextMenus',
       'alarms',
+      'identity',
       ...(browser === 'firefox' ? [] : ['sidePanel']),
     ],
     host_permissions: [

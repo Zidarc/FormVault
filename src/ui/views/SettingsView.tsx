@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { availableModels } from '@/lib/ai/providers';
+import { DRIVE_ORIGINS, connectDrive, disconnectDrive, redirectUrl, syncDrive } from '@/lib/drive';
 import { download, isLocked, mergeVaults, parseVaultFile, serialiseVault } from '@/lib/backup';
 import { loadVault, saveVault, updateSettings } from '@/lib/storage';
 import { emptyVault, type Settings, type Vault } from '@/lib/types';
@@ -14,6 +15,7 @@ export function SettingsView({ vault, settings }: { vault: Vault; settings: Sett
   const [pending, setPending] = useState<string | null>(null);
   const [ghToken, setGhToken] = useState(settings.githubToken ?? '');
   const backup = useTask();
+  const drive = useTask();
 
   useEffect(() => {
     availableModels(settings).then(setModels).catch(() => setModels([]));
@@ -88,6 +90,50 @@ export function SettingsView({ vault, settings }: { vault: Vault; settings: Sett
           </div>
         )}
         <Status {...backup} />
+      </Card>
+
+      <Card
+        title="Sync with Google Drive"
+        sub="Keeps your vault the same on every browser. It's saved in a hidden folder in your own Drive — FormVault has no server."
+      >
+        {settings.driveConnected ? (
+          <>
+            <p className="hint">{settings.driveLastSync ? `Last synced ${new Date(settings.driveLastSync).toLocaleString()}.` : 'Connected.'} Syncs daily.</p>
+            <div className="row">
+              <button className="btn primary small" disabled={drive.busy} onClick={() => drive.run(async () => `Synced at ${new Date(await syncDrive(true)).toLocaleTimeString()}.`)}>
+                Sync now
+              </button>
+              <button className="btn ghost small" onClick={() => disconnectDrive()}>Disconnect</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <button
+              className="btn"
+              disabled={drive.busy}
+              onClick={async () => {
+                const ok = await browser.permissions.request({ origins: DRIVE_ORIGINS });
+                if (!ok) return drive.setError('FormVault needs permission to reach Google Drive.');
+                drive.run(async () => {
+                  await connectDrive();
+                  return 'Connected and synced.';
+                });
+              }}
+            >
+              Connect Google Drive
+            </button>
+            <details>
+              <summary className="hint">Using your own Google client ID</summary>
+              <p className="hint" style={{ margin: '6px 0' }}>
+                Create a free OAuth client (type “Web application”) in Google Cloud Console with this redirect URI:
+                <br />
+                <code style={{ overflowWrap: 'anywhere' }}>{redirectUrl()}</code>
+              </p>
+              <input placeholder="…apps.googleusercontent.com" value={settings.driveClientId ?? ''} onChange={(e) => updateSettings({ driveClientId: e.target.value.trim() || undefined })} />
+            </details>
+          </>
+        )}
+        <Status {...drive} />
       </Card>
 
       <Card title="Capture as you go" sub="Small chips on LinkedIn, AI chats and email that ask “Add to vault?”. They only read a page when you tap them.">

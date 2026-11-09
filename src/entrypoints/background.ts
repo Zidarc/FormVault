@@ -1,4 +1,5 @@
 import { nowIso } from '@/lib/ids';
+import { syncDrive } from '@/lib/drive';
 import { injectReader } from '@/lib/fill/client';
 import { syncDevpost } from '@/lib/import/devpost';
 import { syncGitHub } from '@/lib/import/github';
@@ -60,6 +61,9 @@ export default defineBackground(() => {
     if (s.githubUser) jobs.push(syncGitHub());
     if (s.devpostUser) jobs.push(syncDevpost());
     if (s.resumeDocUrl) jobs.push(syncResumeDoc());
+    await Promise.allSettled(jobs);
+    // Drive last, so today's finds sync too
+    if (s.driveConnected) jobs.push(syncDrive(false));
     const results = await Promise.allSettled(jobs);
     for (const r of results) if (r.status === 'rejected') console.warn('[FormVault] sync failed', r.reason);
     await browser.storage.local.set({ lastAutoSync: nowIso() });
