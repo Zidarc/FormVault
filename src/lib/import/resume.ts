@@ -2,13 +2,14 @@
 // Contact details are read locally with patterns and never sent to the AI.
 
 import { nowIso } from '../ids';
-import { generateJson } from '../ai/providers';
-import { EXTRACT_SYSTEM } from '../ai/prompts';
 import { proposeProfile } from '../inbox';
 import { loadSettings, updateSettings, updateVault } from '../storage';
 import { CNIC_RE, EMAIL_RE, redactPersonal } from '../text';
 import type { Profile, SourceKind, SourceRef } from '../types';
-import { extractToInbox, proposeExtracted, type Extracted, type ImportProgress } from './extract';
+import { extractToInbox, type ImportProgress } from './extract';
+import { openArchive, text as u8text } from './files';
+import { importImage } from './image';
+import { ocr } from './ocr';
 
 export async function pdfToText(file: Blob): Promise<string> {
   const pdfjs = await import('pdfjs-dist');
@@ -67,8 +68,72 @@ async function importResumeText(text: string, source: SourceRef, onProgress?: Im
 
 export async function importResumePdf(file: File, onProgress?: ImportProgress) {
   onProgress?.('Reading the PDF…');
-  const text = await pdfToText(file);
-  if (text.trim().length < 50) throw new Error("Couldn't find text in this PDF. Is it a scanned image? Try uploading it as a certificate image instead.");
+  let text = await pdfToText(file);
+  if (text.trim().length < 50) {
+    // A scanned resume: read the pages with local OCR instead.
+    const pages = await pdfPageImages(file, 4);
+    const parts: string[] = [];
+    for (const [i, p] of pages.entries()) {
+      const r = await ocr(p, (pct) => onProgress?.(`Scanned PDF — reading page ${i + 1}/${pages.length}… ${pct}%`));
+      parts.push(r.text);
+    }
+    text = parts.join('\n\n');
+    if (text.trim().length < 50) throw new Error("Couldn't find any text in this PDF, even with OCR. Try a clearer scan.");
+  }
+  return importResumeText(text, { kind: 'resume', label: `Resume · ${file.name}`, at: nowIso() }, onProgress);
+}
+
+/** Render the first pages of a PDF to images (for scanned documents). */
+export async function pdfPageImages(file: Blob, maxPages = 3): Promise<Blob[]> {
+  const pdfjs = await import('pdfjs-dist');
+  const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
+  const out: Blob[] = [];
+  for (let i = 1; i <= Math.min(doc.numPages, maxPages); i++) {
+    const page = await doc.getPage(i);
+    const base = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: Math.min(3, 2200 / Math.max(base.width, base.height)) });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvas, canvasContext: ctx, viewport } as any).promise;
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'));
+    if (blob) out.push(blob);
+  }
+  return out;
+}
+
+/** Word documents: the text lives in word/document.xml inside the zip. */
+export async function docxToText(file: File): Promise<string> {
+  const files = await openArchive(file);
+  const xml = files.get('word/document.xml');
+  if (!xml) throw new Error("This doesn't look like a Word document.");
+  return docxXmlToText(u8text(xml));
+}
+
+export function docxXmlToText(xml: string): string {
+  return xml
+    .replace(/<w:tab\/>/g, '\t')
+    .replace(/<w:br[^>]*\/>|<\/w:p>/g, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+export async function importResumeDocx(file: File, onProgress?: ImportProgress) {
+  onProgress?.('Reading the Word document…');
+  const text = await docxToText(file);
+  if (text.length < 50) throw new Error('This document looks empty.');
   return importResumeText(text, { kind: 'resume', label: `Resume · ${file.name}`, at: nowIso() }, onProgress);
 }
 
@@ -117,38 +182,29 @@ export async function importPasted(text: string, onProgress?: ImportProgress, ki
   return extractToInbox([text], source, onProgress);
 }
 
-const toB64 = async (f: Blob) => {
-  const bytes = new Uint8Array(await f.arrayBuffer());
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(bin);
-};
-
-/** Certificates: PDFs are read as text; images are sent to the AI (it reads the certificate). */
+/** Certificates: PDFs are read as text; images (and scanned PDFs) go through local OCR first. */
 export async function importCertificates(files: File[], onProgress?: ImportProgress): Promise<number> {
   const settings = await loadSettings();
+  const hint =
+    'This is a certificate or award. Extract it as an achievement (and a hackathon if it is a hackathon certificate). Ignore personal ID numbers.';
   let n = 0;
   for (const [i, f] of files.entries()) {
-    onProgress?.(`Reading certificate ${i + 1}/${files.length}: ${f.name}`, i, files.length);
+    const step = (m: string) => onProgress?.(`${files.length > 1 ? `(${i + 1}/${files.length}) ` : ''}${m}`, i, files.length);
+    step(`Reading ${f.name}…`);
     const source: SourceRef = { kind: 'certificate', label: `Certificate · ${f.name}`, at: nowIso() };
-    if (f.type === 'application/pdf') {
+    if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) {
       const text = await pdfToText(f);
       if (text.trim().length > 30) {
         n += await extractToInbox([`Certificate document:\n${redactPersonal(text)}`], source, undefined, settings);
         continue;
       }
+      // A scanned certificate: OCR the first page.
+      const [page] = await pdfPageImages(f, 1);
+      if (page) n += (await importImage(page, step, { name: f.name, kind: 'certificate', label: source.label, hint })).found;
+      continue;
     }
     if (!f.type.startsWith('image/')) continue;
-    if (f.size > 8_000_000) throw new Error(`${f.name} is too large (max 8 MB).`);
-    const x = await generateJson<Extracted>(settings, {
-      system: EXTRACT_SYSTEM,
-      prompt: 'This is a certificate or award. Extract it as an achievement (and a hackathon if it is a hackathon certificate). Ignore personal ID numbers.',
-      images: [{ mime: f.type, data: await toB64(f) }],
-      temperature: 0.1,
-    });
-    await updateVault((v) => {
-      n += proposeExtracted(v, x, source);
-    });
+    n += (await importImage(f, step, { name: f.name, kind: 'certificate', label: source.label, hint })).found;
   }
   return n;
 }

@@ -13,7 +13,8 @@ export type SourceKind =
   | 'email'
   | 'certificate'
   | 'form'
-  | 'page';
+  | 'page'
+  | 'image';
 
 export interface SourceRef {
   kind: SourceKind;

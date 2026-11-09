@@ -19,7 +19,7 @@ export async function openArchive(file: File): Promise<FileMap> {
   }
   const files = unzipSync(bytes, {
     // skip media to save memory
-    filter: (f) => /\.(csv|json|html?|txt|md)$/i.test(f.name),
+    filter: (f) => /\.(csv|json|html?|txt|md)$/i.test(f.name) || f.name === 'word/document.xml',
   });
   for (const [name, data] of Object.entries(files)) out.set(name.toLowerCase(), data);
   return out;
