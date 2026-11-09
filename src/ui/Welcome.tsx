@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AccessBanner } from './AccessBanner';
 import { updateSettings } from '@/lib/storage';
 import { useSettings, useVault } from './hooks';
 import { KeySetup } from './KeySetup';
@@ -32,6 +33,7 @@ export function Welcome() {
       </div>
 
       <div className="stack" style={{ gap: 16 }}>
+        <AccessBanner />
         <section className="card">
           <h2>1. Get your free AI key</h2>
           <p className="sub">It's free and takes three clicks. No credit card.</p>

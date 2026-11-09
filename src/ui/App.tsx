@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AccessBanner } from './AccessBanner';
 import { useSettings, useVault } from './hooks';
 import { FillView } from './views/FillView';
 import { ImportView } from './views/ImportView';
@@ -58,6 +59,7 @@ export function App() {
         </nav>
       </div>
       <main>
+        <AccessBanner />
         {toast && (
           <p className="msg ok" role="status" onClick={() => setTab('inbox')} style={{ cursor: 'pointer' }}>
             {toast}
