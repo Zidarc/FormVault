@@ -4,10 +4,11 @@ import { importChats } from '@/lib/import/chats';
 import { syncDevpost } from '@/lib/import/devpost';
 import { syncGitHub } from '@/lib/import/github';
 import { importLinkedIn } from '@/lib/import/linkedin';
-import { googleDocId, importCertificates, importPasted, importResumePdf, syncResumeDoc } from '@/lib/import/resume';
+import { googleDocId, importCertificates, importResumeDocx, importResumePdf, syncResumeDoc } from '@/lib/import/resume';
 import { updateSettings } from '@/lib/storage';
 import type { Vault } from '@/lib/types';
 import { Card, FilePick, Status } from '../components';
+import { QuickAdd } from '../QuickAdd';
 import { useSettings, useTask } from '../hooks';
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -15,14 +16,12 @@ const found = (n: number) => (n ? `Found ${plural(n, 'thing')} — check your In
 
 export function ImportView({ vault, onOpenInbox }: { vault: Vault; onOpenInbox?: () => void }) {
   const settings = useSettings();
-  const paste = useTask();
   const li = useTask();
   const chats = useTask();
   const resume = useTask();
   const gh = useTask();
   const dp = useTask();
   const certs = useTask();
-  const [text, setText] = useState('');
   const [ghUser, setGhUser] = useState('');
   const [dpUser, setDpUser] = useState('');
   const [docUrl, setDocUrl] = useState('');
@@ -35,7 +34,7 @@ export function ImportView({ vault, onOpenInbox }: { vault: Vault; onOpenInbox?:
   }, [settings]);
 
   const summary = inboxSummary(vault);
-  const anyBusy = [paste, li, chats, resume, gh, dp, certs].some((t) => t.busy);
+  const anyBusy = [li, chats, resume, gh, dp, certs].some((t) => t.busy);
 
   return (
     <>
@@ -54,30 +53,9 @@ export function ImportView({ vault, onOpenInbox }: { vault: Vault; onOpenInbox?:
         </div>
       )}
 
-      <Card title="Paste anything" sub="A resume, a LinkedIn post, notes — FormVault sorts it into the right sections.">
-        <textarea
-          rows={5}
-          value={text}
-          placeholder="Paste here…"
-          onChange={(e) => setText(e.target.value)}
-        />
-        <div className="row">
-          <button
-            className="btn primary"
-            disabled={!text.trim() || paste.busy}
-            onClick={() =>
-              paste.run(async (p) => {
-                const n = await importPasted(text, p);
-                setText('');
-                return found(n);
-              })
-            }
-          >
-            Sort into my vault
-          </button>
-        </div>
-        <Status {...paste} />
-      </Card>
+      <QuickAdd onOpenInbox={onOpenInbox} />
+
+      <h2 className="section-h">Or connect a source</h2>
 
       <Card
         title="LinkedIn"
@@ -131,12 +109,14 @@ export function ImportView({ vault, onOpenInbox }: { vault: Vault; onOpenInbox?:
         <Status {...chats} />
       </Card>
 
-      <Card title="Resume" sub="Upload a PDF, or link a Google Doc — FormVault re-reads the doc when it changes.">
+      <Card title="Resume" sub="Upload a PDF or Word file (scans are fine), or link a Google Doc — FormVault re-reads the doc when it changes.">
         <FilePick
-          label="Upload resume PDF"
-          accept="application/pdf"
+          label="Upload resume"
+          accept="application/pdf,.docx"
           disabled={resume.busy}
-          onFiles={([f]) => resume.run(async (p) => found(await importResumePdf(f, p)))}
+          onFiles={([f]) =>
+            resume.run(async (p) => found(/.docx$/i.test(f.name) ? await importResumeDocx(f, p) : await importResumePdf(f, p)))
+          }
         />
         <div className="row">
           <input

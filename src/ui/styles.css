@@ -145,3 +145,17 @@ textarea { resize: vertical; }
 details > summary { cursor: pointer; font-weight: 600; }
 .found { display: flex; flex-wrap: wrap; gap: 6px; }
 .found .pill { font-size: 13px; padding: 3px 10px; }
+
+/* Quick add */
+.quick { border-style: dashed; border-width: 2px; }
+.quick.over { border-color: var(--accent); background: var(--accent-soft); }
+.section-h { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; }
+.jobs { display: flex; flex-direction: column; gap: 6px; }
+.job { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--bg); }
+.job.error { border-color: var(--err); }
+.job.done { border-color: var(--ok-soft); }
+.job img, .job-icon { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex: none; }
+.job-icon { display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: 16px; }
+.job-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job .hint { display: flex; gap: 6px; align-items: center; overflow-wrap: anywhere; }
+.app.dragging main { outline: 2px dashed var(--accent); outline-offset: -6px; border-radius: 12px; }

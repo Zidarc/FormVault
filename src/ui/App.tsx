@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AccessBanner } from './AccessBanner';
 import { useSettings, useVault } from './hooks';
+import { enqueueFiles, filesFrom } from './queue';
 import { FillView } from './views/FillView';
 import { ImportView } from './views/ImportView';
 import { InboxView } from './views/InboxView';
@@ -37,13 +38,47 @@ export function App() {
     return () => browser.storage.onChanged.removeListener(l);
   }, []);
 
+  // Drop a file anywhere in the panel, or paste a screenshot outside a text box, and it goes to Quick add.
+  const [dragging, setDragging] = useState(false);
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el?.closest?.('input, textarea, [contenteditable]')) return;
+      const files = filesFrom(e.clipboardData);
+      if (!files.length) return;
+      e.preventDefault();
+      enqueueFiles(files);
+      setTab('import');
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, []);
+
   useEffect(() => {
     const t = new URLSearchParams(location.search).get('tab') as Tab | null;
     if (t && TABS.some((x) => x.id === t)) setTab(t);
   }, []);
 
   return (
-    <div className="app">
+    <div
+      className={`app ${dragging ? 'dragging' : ''}`}
+      onDragOver={(e) => {
+        if (![...e.dataTransfer.types].includes('Files')) return;
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.relatedTarget) setDragging(false);
+      }}
+      onDrop={(e) => {
+        setDragging(false);
+        const files = filesFrom(e.dataTransfer);
+        if (!files.length) return;
+        e.preventDefault();
+        enqueueFiles(files);
+        setTab('import');
+      }}
+    >
       <div className="top">
         <div className="brand">
           <img src="/icon/32.png" alt="" />
