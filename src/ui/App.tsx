@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { useVault } from './hooks';
 import { ImportView } from './views/ImportView';
 import { InboxView } from './views/InboxView';
+import { VaultView } from './views/VaultView';
 
-export type Tab = 'inbox' | 'import';
+export type Tab = 'inbox' | 'vault' | 'import';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'inbox', label: 'Inbox' },
+  { id: 'vault', label: 'Vault' },
   { id: 'import', label: 'Import' },
 ];
 
@@ -37,6 +39,7 @@ export function App() {
       </div>
       <main>
         {vault && tab === 'inbox' && <InboxView vault={vault} onImport={() => setTab('import')} />}
+        {vault && tab === 'vault' && <VaultView vault={vault} />}
         {vault && tab === 'import' && <ImportView vault={vault} onOpenInbox={() => setTab('inbox')} />}
       </main>
     </div>
