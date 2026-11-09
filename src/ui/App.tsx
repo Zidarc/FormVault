@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useVault } from './hooks';
 import { ImportView } from './views/ImportView';
+import { InboxView } from './views/InboxView';
 
-export type Tab = 'import';
+export type Tab = 'inbox' | 'import';
 
-const TABS: { id: Tab; label: string }[] = [{ id: 'import', label: 'Import' }];
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'inbox', label: 'Inbox' },
+  { id: 'import', label: 'Import' },
+];
 
 export function App() {
   const vault = useVault();
@@ -26,11 +30,15 @@ export function App() {
           {TABS.map((t) => (
             <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}>
               {t.label}
+              {t.id === 'inbox' && !!vault?.inbox.length && <span className="badge">{vault.inbox.length}</span>}
             </button>
           ))}
         </nav>
       </div>
-      <main>{vault && tab === 'import' && <ImportView vault={vault} />}</main>
+      <main>
+        {vault && tab === 'inbox' && <InboxView vault={vault} onImport={() => setTab('import')} />}
+        {vault && tab === 'import' && <ImportView vault={vault} onOpenInbox={() => setTab('inbox')} />}
+      </main>
     </div>
   );
 }
