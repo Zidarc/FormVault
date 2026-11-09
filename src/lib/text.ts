@@ -119,7 +119,7 @@ export const SIGNAL_WORDS = [
   'placed', 'position', 'challenge', 'demo', 'pitch', 'research', 'paper', 'published', 'scholarship',
   'fellowship', 'volunteer', 'lead', 'organized', 'organised', 'mentor',
 ];
-const SIGNAL_RE = new RegExp(`\b(${SIGNAL_WORDS.join('|')})`, 'i');
+const SIGNAL_RE = new RegExp(`\\b(${SIGNAL_WORDS.join('|')})`, 'i');
 
 export const hasSignal = (s: string) => SIGNAL_RE.test(s);
 

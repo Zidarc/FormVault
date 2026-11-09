@@ -76,7 +76,8 @@ function diff(existing: Record<string, any>, incoming: Record<string, any>) {
   const data: Record<string, any> = {};
   const before: Record<string, any> = {};
   for (const [k, v] of Object.entries(incoming)) {
-    if (k === 'id' || k === 'sources' || k === 'updatedAt') continue;
+    // Identity fields matched already — a slightly different spelling isn't a change.
+    if (k === 'id' || k === 'sources' || k === 'updatedAt' || k === 'title' || k === 'name' || k === 'organisation') continue;
     const old = existing[k];
     if (Array.isArray(v)) {
       const have = new Set(((old as string[]) ?? []).map((x) => x.toLowerCase()));

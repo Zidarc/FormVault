@@ -14,7 +14,7 @@ export async function pdfToText(file: Blob): Promise<string> {
   const pdfjs = await import('pdfjs-dist');
   const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
   const pages: string[] = [];
   for (let i = 1; i <= Math.min(doc.numPages, 30); i++) {
     const page = await doc.getPage(i);
