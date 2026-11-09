@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useSettings, useVault } from './hooks';
+import { FillView } from './views/FillView';
 import { ImportView } from './views/ImportView';
 import { InboxView } from './views/InboxView';
 import { SettingsView } from './views/SettingsView';
 import { VaultView } from './views/VaultView';
 
-export type Tab = 'inbox' | 'vault' | 'import' | 'settings';
+export type Tab = 'fill' | 'inbox' | 'vault' | 'import' | 'settings';
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'fill', label: 'Fill' },
   { id: 'inbox', label: 'Inbox' },
   { id: 'vault', label: 'Vault' },
   { id: 'import', label: 'Import' },
@@ -17,7 +19,7 @@ const TABS: { id: Tab; label: string }[] = [
 export function App() {
   const vault = useVault();
   const settings = useSettings();
-  const [tab, setTab] = useState<Tab>('import');
+  const [tab, setTab] = useState<Tab>('fill');
 
   useEffect(() => {
     const t = new URLSearchParams(location.search).get('tab') as Tab | null;
@@ -41,6 +43,7 @@ export function App() {
         </nav>
       </div>
       <main>
+        {vault && settings && tab === 'fill' && <FillView vault={vault} settings={settings} onOpenSettings={() => setTab('settings')} />}
         {vault && tab === 'inbox' && <InboxView vault={vault} onImport={() => setTab('import')} />}
         {vault && tab === 'vault' && <VaultView vault={vault} />}
         {vault && tab === 'import' && <ImportView vault={vault} onOpenInbox={() => setTab('inbox')} />}
