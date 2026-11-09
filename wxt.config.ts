@@ -26,6 +26,7 @@ export default defineConfig({
       'https://devpost.com/*',
     ],
     optional_host_permissions: ['https://docs.google.com/*', 'https://www.googleapis.com/*', '<all_urls>'],
+    action: { default_title: 'FormVault — fill this form' },
     commands: {
       _execute_action: {
         suggested_key: { default: 'Alt+Shift+F' },

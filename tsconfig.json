@@ -4,6 +4,7 @@
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "strict": true,
+    "noUncheckedIndexedAccess": false,
     "noUnusedLocals": true,
     "skipLibCheck": true
   }
