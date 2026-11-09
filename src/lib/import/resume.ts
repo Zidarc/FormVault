@@ -56,7 +56,7 @@ export function localProfileFields(text: string): Partial<Profile> {
   return Object.fromEntries(Object.entries(p).filter(([, v]) => v)) as Partial<Profile>;
 }
 
-async function importResumeText(text: string, source: SourceRef, onProgress?: ImportProgress) {
+export async function importResumeText(text: string, source: SourceRef, onProgress?: ImportProgress) {
   const local = localProfileFields(text);
   await updateVault((v) => {
     proposeProfile(v, local, source);
