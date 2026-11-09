@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { SECTION_LABELS, applyInboxItem, dismissInboxItem, titleOf } from '@/lib/inbox';
+import { useEffect, useState } from 'react';
+import { SECTION_LABELS, applyInboxItem, dismissInboxItem, titleOf, undoInboxAction } from '@/lib/inbox';
 import { updateVault } from '@/lib/storage';
 import type { InboxItem, SectionKey, Vault } from '@/lib/types';
 import { Empty, Field, Tags } from '../components';
@@ -27,7 +27,9 @@ function itemTitle(v: Vault, i: InboxItem): string {
 
 const show = (x: unknown) => (Array.isArray(x) ? x.join(', ') : String(x ?? ''));
 
-function InboxCard({ vault, item }: { vault: Vault; item: InboxItem }) {
+type Act = (label: string, fn: (v: Vault) => void) => Promise<void>;
+
+function InboxCard({ vault, item, act }: { vault: Vault; item: InboxItem; act: Act }) {
   const [editing, setEditing] = useState(false);
   const [data, setData] = useState<Record<string, any>>(item.data);
   const isUpdate = item.op === 'update';
@@ -82,14 +84,14 @@ function InboxCard({ vault, item }: { vault: Vault; item: InboxItem }) {
       <div className="row">
         <button
           className="btn primary small"
-          onClick={() => updateVault((v) => applyInboxItem(v, item.id, editing ? data : undefined))}
+          onClick={() => act(`Added “${itemTitle(vault, item)}”.`, (v) => applyInboxItem(v, item.id, editing ? data : undefined))}
         >
           {isUpdate ? 'Apply' : 'Add to vault'}
         </button>
         <button className="btn small" onClick={() => setEditing(!editing)}>
           {editing ? 'Cancel edit' : 'Edit'}
         </button>
-        <button className="btn ghost small" onClick={() => updateVault((v) => dismissInboxItem(v, item.id))}>
+        <button className="btn ghost small" onClick={() => act(`Dismissed “${itemTitle(vault, item)}”.`, (v) => dismissInboxItem(v, item.id))}>
           Dismiss
         </button>
       </div>
@@ -101,18 +103,53 @@ export function InboxView({ vault, onImport }: { vault: Vault; onImport?: () => 
   const [filter, setFilter] = useState<InboxItem['section'] | 'all'>('all');
   const items = vault.inbox.filter((i) => filter === 'all' || i.section === filter);
   const sections = [...new Set(vault.inbox.map((i) => i.section))];
+  const [undo, setUndo] = useState<{ label: string; before: Vault; after: Vault } | null>(null);
+
+  useEffect(() => {
+    if (!undo) return;
+    const t = setTimeout(() => setUndo(null), 15_000);
+    return () => clearTimeout(t);
+  }, [undo]);
+
+  const act: Act = async (label, fn) => {
+    let before!: Vault;
+    const after = await updateVault((v) => {
+      before = structuredClone(v);
+      fn(v);
+    });
+    setUndo({ label, before, after: structuredClone(after) });
+  };
+
+  const undoBar = undo && (
+    <div className="undo-bar" role="status">
+      <span className="grow">{undo.label}</span>
+      <button
+        className="btn small"
+        onClick={async () => {
+          const u = undo;
+          setUndo(null);
+          await updateVault((v) => undoInboxAction(v, u.before, u.after));
+        }}
+      >
+        Undo
+      </button>
+    </div>
+  );
 
   if (!vault.inbox.length)
     return (
-      <Empty>
-        <p><b>Your Inbox is empty.</b></p>
-        <p className="hint" style={{ marginTop: 6 }}>New finds from your imports and chips land here for a quick OK.</p>
-        {onImport && (
-          <button className="btn primary" style={{ marginTop: 12 }} onClick={onImport}>
-            Import something
-          </button>
-        )}
-      </Empty>
+      <>
+        {undoBar}
+        <Empty>
+          <p><b>Your Inbox is empty.</b></p>
+          <p className="hint" style={{ marginTop: 6 }}>New finds from your imports and chips land here for a quick OK.</p>
+          {onImport && (
+            <button className="btn primary" style={{ marginTop: 12 }} onClick={onImport}>
+              Import something
+            </button>
+          )}
+        </Empty>
+      </>
     );
 
   return (
@@ -130,7 +167,7 @@ export function InboxView({ vault, onImport }: { vault: Vault; onImport?: () => 
         <button
           className="btn small"
           onClick={() =>
-            updateVault((v) => {
+            act(`Approved ${items.length} item${items.length === 1 ? '' : 's'}.`, (v) => {
               // Projects first so hackathons can link to them
               const order = ['profile', 'skills', 'projects', 'experience', 'achievements', 'hackathons'];
               const ids = items
@@ -146,9 +183,10 @@ export function InboxView({ vault, onImport }: { vault: Vault; onImport?: () => 
       </div>
       <div className="list">
         {items.map((i) => (
-          <InboxCard key={i.id} vault={vault} item={i} />
+          <InboxCard key={i.id} vault={vault} item={i} act={act} />
         ))}
       </div>
+      {undoBar}
     </>
   );
 }

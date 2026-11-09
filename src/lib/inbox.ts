@@ -282,3 +282,19 @@ export function inboxSummary(vault: Vault): string {
   if (updates) parts.push(`${updates} update${updates === 1 ? '' : 's'}`);
   return parts.join(', ');
 }
+
+const UNDO_KEYS = ['profile', 'skills', 'projects', 'hackathons', 'experience', 'achievements'] as const;
+
+/**
+ * Undo an Inbox action. `before`/`after` bracket the action; `current` may also contain finds that
+ * arrived since (an import still running), and those are kept.
+ */
+export function undoInboxAction(current: Vault, before: Vault, after: Vault): Vault {
+  const out: Vault = { ...current };
+  for (const k of UNDO_KEYS) (out as any)[k] = structuredClone(before[k]);
+  const afterIds = new Set(after.inbox.map((i) => i.id));
+  const beforeIds = new Set(before.inbox.map((i) => i.id));
+  const arrivedSince = current.inbox.filter((i) => !afterIds.has(i.id) && !beforeIds.has(i.id));
+  out.inbox = [...structuredClone(before.inbox), ...arrivedSince];
+  return out;
+}

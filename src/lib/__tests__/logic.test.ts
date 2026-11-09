@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyInboxItem, propose, proposeProfile, relink } from '../inbox';
+import { applyInboxItem, propose, proposeProfile, relink, undoInboxAction } from '../inbox';
 import { instantFill, profileKeyFor } from '../fill/profileMatch';
 import { decideMode, matchMemory } from '../fill/memory';
 import { detectPick } from '../fill/pick';
@@ -162,5 +162,22 @@ describe('importers', () => {
   it('reads contact details from a resume locally', () => {
     const p = localProfileFields('Ali Khan\nali.khan@nu.edu.pk | 0300-1234567\ngithub.com/alik | linkedin.com/in/alik\nFAST NUCES Karachi\nCGPA: 3.45');
     expect(p).toMatchObject({ name: 'Ali Khan', email: 'ali.khan@nu.edu.pk', cgpa: '3.45', github: 'https://github.com/alik' });
+  });
+});
+
+describe('inbox undo', () => {
+  it('restores the vault but keeps finds that arrived since', () => {
+    const v = emptyVault();
+    propose(v, 'projects', [{ title: 'FormVault', summary: 'A vault' }], { kind: 'paste', at: '2026-01-01' });
+    const before = structuredClone(v);
+    applyInboxItem(v, v.inbox[0].id);
+    const after = structuredClone(v);
+    expect(after.projects).toHaveLength(1);
+    expect(after.inbox).toHaveLength(0);
+    // an import finishes in the meantime
+    propose(v, 'hackathons', [{ name: 'HackNU' }], { kind: 'paste', at: '2026-01-01' });
+    const undone = undoInboxAction(v, before, after);
+    expect(undone.projects).toHaveLength(0);
+    expect(undone.inbox.map((i) => i.section).sort()).toEqual(['hackathons', 'projects']);
   });
 });

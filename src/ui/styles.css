@@ -159,3 +159,5 @@ details > summary { cursor: pointer; font-weight: 600; }
 .job-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job .hint { display: flex; gap: 6px; align-items: center; overflow-wrap: anywhere; }
 .app.dragging main { outline: 2px dashed var(--accent); outline-offset: -6px; border-radius: 12px; }
+.undo-bar { position: sticky; bottom: 8px; display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--ink); color: var(--bg); font-size: 13px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.2); z-index: 5; }
+.undo-bar .btn { background: transparent; color: var(--bg); border-color: currentColor; }
