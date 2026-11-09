@@ -20,6 +20,21 @@ export function App() {
   const vault = useVault();
   const settings = useSettings();
   const [tab, setTab] = useState<Tab>('fill');
+  const [toast, setToast] = useState('');
+
+  // Results of right-click captures arrive from the background.
+  useEffect(() => {
+    const show = async () => {
+      const { toast: t } = (await browser.storage.session.get('toast')) as { toast?: { text: string; at: number } };
+      if (t && Date.now() - t.at < 15_000) {
+        setToast(t.text);
+        setTimeout(() => setToast(''), 6000);
+      }
+    };
+    const l = (c: Record<string, unknown>, area: string) => area === 'session' && 'toast' in c && show();
+    browser.storage.onChanged.addListener(l);
+    return () => browser.storage.onChanged.removeListener(l);
+  }, []);
 
   useEffect(() => {
     const t = new URLSearchParams(location.search).get('tab') as Tab | null;
@@ -43,6 +58,11 @@ export function App() {
         </nav>
       </div>
       <main>
+        {toast && (
+          <p className="msg ok" role="status" onClick={() => setTab('inbox')} style={{ cursor: 'pointer' }}>
+            {toast}
+          </p>
+        )}
         {vault && settings && tab === 'fill' && <FillView vault={vault} settings={settings} onOpenSettings={() => setTab('settings')} />}
         {vault && tab === 'inbox' && <InboxView vault={vault} onImport={() => setTab('import')} />}
         {vault && tab === 'vault' && <VaultView vault={vault} />}
