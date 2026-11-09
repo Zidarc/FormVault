@@ -87,7 +87,13 @@ export interface DraftProgress {
   (msg: string): void;
 }
 
-export async function draftForm(scan: ScanResult, vault: Vault, settings: Settings, onProgress?: DraftProgress): Promise<Draft[]> {
+export async function draftForm(
+  scan: ScanResult,
+  vault: Vault,
+  settings: Settings,
+  onProgress?: DraftProgress,
+  opts: { noAi?: boolean } = {},
+): Promise<Draft[]> {
   const drafts: Draft[] = [];
   const mk = (field: ScannedField, d: Partial<Draft>): Draft => {
     const answer = d.answer ?? (field.kind === 'checkbox' ? [] : '');
@@ -174,7 +180,14 @@ export async function draftForm(scan: ScanResult, vault: Vault, settings: Settin
   }
 
   // 3. One AI call for everything else
-  if (toAi.length) {
+  if (toAi.length && opts.noAi) {
+    for (const { f, reuse } of toAi)
+      drafts.push(
+        reuse
+          ? mk(f, { origin: 'memory', label: `Your answer from ${reuse.memory.site} (may need trimming)`, answer: reuse.memory.text, sources: reuse.memory.usedEntryIds, memoryId: reuse.memory.id })
+          : mk(f, { origin: 'none', label: 'Needs an AI key to draft', notInVault: true }),
+      );
+  } else if (toAi.length) {
     onProgress?.(`Drafting ${toAi.length} answer${toAi.length === 1 ? '' : 's'} (one AI call)…`);
     const questions = toAi.map(({ f, reuse }) => ({
       id: f.id + '@' + f.frameId,

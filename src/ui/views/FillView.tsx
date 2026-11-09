@@ -203,10 +203,10 @@ export function FillView({ vault, settings, onOpenSettings }: { vault: Vault; se
         if (!hasKey) {
           setError('Add your free AI key in Settings to draft answers. Profile fields still work.');
         }
-        const d = await draftForm(s, vaultRef.current, settings, setBusy).catch(async (e) => {
+        const d = await draftForm(s, vaultRef.current, settings, setBusy, { noAi: !hasKey }).catch(async (e) => {
           setError(e instanceof Error ? e.message : String(e));
-          // Fall back to instant fills only
-          return draftForm(s, vaultRef.current, { ...settings, keys: {}, provider: 'gemini' }).catch(() => []);
+          // AI failed (limit, network…) — still show profile fills and saved answers
+          return draftForm(s, vaultRef.current, settings, undefined, { noAi: true });
         });
         setDrafts(d);
       } catch (e) {
