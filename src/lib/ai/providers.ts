@@ -18,6 +18,8 @@ export interface GenerateOpts {
   /** Ask for JSON back */
   json?: boolean;
   temperature?: number;
+  /** Images (e.g. certificates) as base64 */
+  images?: { mime: string; data: string }[];
 }
 
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
@@ -147,7 +149,15 @@ export async function generate(settings: Settings, opts: GenerateOpts): Promise<
             headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
             body: JSON.stringify({
               systemInstruction: { parts: [{ text: opts.system }] },
-              contents: [{ role: 'user', parts: [{ text: opts.prompt }] }],
+              contents: [
+                {
+                  role: 'user',
+                  parts: [
+                    ...(opts.images ?? []).map((i) => ({ inline_data: { mime_type: i.mime, data: i.data } })),
+                    { text: opts.prompt },
+                  ],
+                },
+              ],
               generationConfig: {
                 temperature: opts.temperature ?? 0.4,
                 ...(opts.json ? { responseMimeType: 'application/json' } : {}),
@@ -178,7 +188,15 @@ export async function generate(settings: Settings, opts: GenerateOpts): Promise<
           model,
           messages: [
             { role: 'system', content: opts.system },
-            { role: 'user', content: opts.prompt },
+            {
+              role: 'user',
+              content: opts.images?.length
+                ? [
+                    ...opts.images.map((i) => ({ type: 'image_url', image_url: { url: `data:${i.mime};base64,${i.data}` } })),
+                    { type: 'text', text: opts.prompt },
+                  ]
+                : opts.prompt,
+            },
           ],
           ...(opts.json ? { response_format: { type: 'json_object' } } : {}),
         }),
@@ -204,7 +222,18 @@ export async function generate(settings: Settings, opts: GenerateOpts): Promise<
           model,
           max_tokens: 8000,
           system: opts.system + (opts.json ? '\nRespond with a single JSON object and nothing else.' : ''),
-          messages: [{ role: 'user', content: opts.prompt }],
+          messages: [
+            {
+              role: 'user',
+              content: [
+                ...(opts.images ?? []).map((i) => ({
+                  type: 'image',
+                  source: { type: 'base64', media_type: i.mime, data: i.data },
+                })),
+                { type: 'text', text: opts.prompt },
+              ],
+            },
+          ],
         }),
       },
       'anthropic',
