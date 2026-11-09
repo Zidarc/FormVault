@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { onRateLimitWait } from '@/lib/ai/providers';
 import { loadSettings, loadVault, onStorageChange } from '@/lib/storage';
 import type { Settings, Vault } from '@/lib/types';
 
@@ -43,6 +44,7 @@ export function useTask() {
     setError('');
     setDone('');
     setProgress('');
+    onRateLimitWait((s) => setProgress(`The free AI tier is busy — trying again in ${s}s…`));
     try {
       const msg = await fn((m) => setProgress(m));
       if (msg) setDone(msg);

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest';
+import { retryAfterSeconds } from '../ai/providers';
 import { cleanOcrText, ocrUsable } from '../import/ocr';
 import { docxXmlToText } from '../import/resume';
 import { classifyDocText, htmlToText, kindFromName } from '../import/route';
@@ -54,5 +55,14 @@ describe('OCR text', () => {
 describe('htmlToText', () => {
   it('reads visible words only', () => {
     expect(htmlToText('<html><head><style>p{}</style></head><body><h1>Hi</h1><script>x()</script><p>There</p></body></html>')).toMatch(/Hi\s*There/);
+  });
+});
+
+describe('rate limits', () => {
+  it('reads the wait from Gemini RetryInfo or a header', () => {
+    const body = { error: { details: [{ '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '23s' }] } };
+    expect(retryAfterSeconds(body, null)).toBe(23);
+    expect(retryAfterSeconds({}, '7')).toBe(7);
+    expect(retryAfterSeconds({}, null)).toBeUndefined();
   });
 });

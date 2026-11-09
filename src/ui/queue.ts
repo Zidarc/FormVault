@@ -2,6 +2,7 @@
 // dislikes bursts). It lives outside React so imports keep going while you switch tabs.
 
 import { useSyncExternalStore } from 'react';
+import { onRateLimitWait } from '@/lib/ai/providers';
 import { importAny } from '@/lib/import/route';
 import { importPasted } from '@/lib/import/resume';
 
@@ -43,6 +44,7 @@ async function pump() {
     for (let job = jobs.find((j) => j.status === 'waiting'); job; job = jobs.find((j) => j.status === 'waiting')) {
       const id = job.id;
       patch(id, { status: 'working', progress: 'Starting…' });
+      onRateLimitWait((s) => patch(id, { progress: `The free AI tier is busy — trying again in ${s}s…` }));
       try {
         const r = await work.get(id)!((m) => patch(id, { progress: m }));
         patch(id, { status: 'done', result: r.text, found: r.found, progress: undefined });

@@ -7,8 +7,37 @@ export class AiError extends Error {
   constructor(
     message: string,
     public kind: 'key' | 'quota' | 'region' | 'network' | 'format' | 'other' = 'other',
+    /** For quota errors: seconds the provider asked us to wait, when it said */
+    public retryAfter?: number,
   ) {
     super(message);
+  }
+}
+
+/** How long a 429 says to wait: Gemini puts it in RetryInfo, OpenAI/Anthropic in a header. */
+export function retryAfterSeconds(body: any, header: string | null): number | undefined {
+  const info = (body?.error?.details ?? []).find((d: any) => String(d?.['@type'] ?? '').includes('RetryInfo'));
+  const fromBody = parseFloat(String(info?.retryDelay ?? ''));
+  if (Number.isFinite(fromBody)) return fromBody;
+  const fromHeader = parseFloat(header ?? '');
+  return Number.isFinite(fromHeader) ? fromHeader : undefined;
+}
+
+// Free tiers allow only a few requests a minute. A short wait beats an error.
+const MAX_AUTO_WAIT = 40;
+let waitNotice: ((seconds: number) => void) | undefined;
+/** Let the UI show "waiting for the free tier…" while a retry is pending. */
+export const onRateLimitWait = (cb?: (seconds: number) => void) => (waitNotice = cb);
+
+async function withRateLimitRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (!(e instanceof AiError) || e.kind !== 'quota' || e.retryAfter == null || e.retryAfter > MAX_AUTO_WAIT) throw e;
+    const s = Math.ceil(e.retryAfter) + 1;
+    waitNotice?.(s);
+    await new Promise((r) => setTimeout(r, s * 1000));
+    return fn();
   }
 }
 
@@ -52,7 +81,9 @@ export function checkKeyShape(provider: ProviderId, key: string): string | null 
   return null;
 }
 
-async function http(url: string, init: RequestInit, provider: ProviderId): Promise<any> {
+const http = (url: string, init: RequestInit, provider: ProviderId) => withRateLimitRetry(() => httpOnce(url, init, provider));
+
+async function httpOnce(url: string, init: RequestInit, provider: ProviderId): Promise<any> {
   let res: Response;
   try {
     res = await fetch(url, init);
@@ -78,8 +109,15 @@ async function http(url: string, init: RequestInit, provider: ProviderId): Promi
       );
     throw new AiError("This key was rejected. Make sure you copied the whole key and that it's active.", 'key');
   }
-  if (res.status === 429)
-    throw new AiError('Free limit reached for now. Try again later, or pick a different model in Settings.', 'quota');
+  if (res.status === 429) {
+    // A daily limit won't clear in seconds — don't wait for it, fall back to another model instead.
+    const daily = /PerDay/i.test(JSON.stringify(body?.error?.details ?? ''));
+    throw new AiError(
+      'Free limit reached for now. Try again later, or pick a different model in Settings.',
+      'quota',
+      daily ? undefined : retryAfterSeconds(body, res.headers.get('retry-after')),
+    );
+  }
   throw new AiError(`${PROVIDER_LABELS[provider]} error (${res.status}): ${msg}`);
 }
 
