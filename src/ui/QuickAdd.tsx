@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { clearFinished, enqueueFiles, enqueueText, filesFrom, retry, useJobs, type Job } from './queue';
+import { asUrl, originsFor } from '@/lib/import/url';
+import { clearFinished, enqueueFiles, enqueueText, enqueueUrl, filesFrom, importAnyway, retry, useJobs, type Job } from './queue';
 
 const ACCEPT = 'image/*,.pdf,.docx,.zip,.json,.csv,.html,.htm,.txt,.md';
 
@@ -24,6 +25,11 @@ function JobRow({ job, onOpenInbox }: { job: Job; onOpenInbox?: () => void }) {
           Review
         </button>
       )}
+      {job.status === 'done' && job.skipped && (
+        <button className="btn small" onClick={() => importAnyway(job.id)}>
+          Import anyway
+        </button>
+      )}
       {job.status === 'error' && (
         <button className="btn small" onClick={() => retry(job.id)}>
           Try again
@@ -41,11 +47,26 @@ export function QuickAdd({ onOpenInbox }: { onOpenInbox?: () => void }) {
   const jobs = useJobs();
   const finished = jobs.filter((j) => j.status === 'done' || j.status === 'error').length;
 
-  const submitText = () => {
+  const submitText = async () => {
     if (!text.trim()) return;
-    enqueueText(text);
+    const u = asUrl(text);
+    if (!u) {
+      enqueueText(text);
+      setText('');
+      return;
+    }
+    // A link: ask for that site first — this has to be the first await inside the click.
+    const origins = originsFor(u);
+    if (origins.length && !(await browser.permissions.request({ origins }).catch(() => false))) {
+      setNote(`FormVault needs your OK to read ${u.hostname}. Or copy the page text and paste that instead.`);
+      return;
+    }
+    setNote('');
+    enqueueUrl(u);
     setText('');
   };
+  const [note, setNote] = useState('');
+  const isLink = !!asUrl(text);
 
   return (
     <section
@@ -65,7 +86,10 @@ export function QuickAdd({ onOpenInbox }: { onOpenInbox?: () => void }) {
         if (files.length) enqueueFiles(files);
         else {
           const t = e.dataTransfer.getData('text/plain');
-          if (t.trim()) enqueueText(t);
+          const u = asUrl(t);
+          if (u && !originsFor(u).length) enqueueUrl(u);
+          else if (u) setText(t); // needs a site permission, which only a click can grant
+          else if (t.trim()) enqueueText(t);
         }
       }}
     >
@@ -81,7 +105,7 @@ export function QuickAdd({ onOpenInbox }: { onOpenInbox?: () => void }) {
       <textarea
         rows={4}
         value={text}
-        placeholder="Paste a post, notes, a project description — or a screenshot…"
+        placeholder="Paste a post, notes, a link (GitHub, Devpost, Google Doc, any page) — or a screenshot…"
         onChange={(e) => setText(e.target.value)}
         onPaste={(e) => {
           const files = filesFrom(e.clipboardData);
@@ -93,13 +117,13 @@ export function QuickAdd({ onOpenInbox }: { onOpenInbox?: () => void }) {
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
-            submitText();
+            void submitText();
           }
         }}
       />
       <div className="row">
         <button className="btn primary" disabled={!text.trim()} onClick={submitText} title="Ctrl+Enter">
-          Add text
+          {isLink ? 'Add link' : 'Add text'}
         </button>
         <button className="btn" onClick={() => fileRef.current?.click()}>
           Choose files
@@ -118,6 +142,7 @@ export function QuickAdd({ onOpenInbox }: { onOpenInbox?: () => void }) {
           }}
         />
       </div>
+      {note && <p className="msg err">{note}</p>}
       {!!jobs.length && (
         <div className="jobs">
           {jobs.map((j) => (

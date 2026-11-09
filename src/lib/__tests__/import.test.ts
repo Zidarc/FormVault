@@ -4,6 +4,7 @@ import { retryAfterSeconds } from '../ai/providers';
 import { cleanOcrText, ocrUsable } from '../import/ocr';
 import { docxXmlToText } from '../import/resume';
 import { classifyDocText, htmlToText, kindFromName } from '../import/route';
+import { asUrl, classifyUrl, originsFor } from '../import/url';
 
 describe('kindFromName', () => {
   it('routes by extension and type', () => {
@@ -64,5 +65,20 @@ describe('rate limits', () => {
     expect(retryAfterSeconds(body, null)).toBe(23);
     expect(retryAfterSeconds({}, '7')).toBe(7);
     expect(retryAfterSeconds({}, null)).toBeUndefined();
+  });
+});
+
+describe('pasted links', () => {
+  it('recognises profiles, docs and pages', () => {
+    expect(asUrl('some text https://x.com')).toBeNull();
+    expect(classifyUrl(asUrl('https://github.com/Zidarc')!)).toEqual({ kind: 'github', user: 'Zidarc' });
+    expect(classifyUrl(asUrl('https://github.com/Zidarc/FormVault')!)).toEqual({ kind: 'github', user: 'Zidarc' });
+    expect(classifyUrl(asUrl('https://devpost.com/ali-k')!)).toEqual({ kind: 'devpost', user: 'ali-k' });
+    expect(classifyUrl(asUrl('https://docs.google.com/document/d/abc123/edit')!).kind).toBe('gdoc');
+    expect(classifyUrl(asUrl('https://www.linkedin.com/posts/x')!).kind).toBe('linkedin');
+    const page = asUrl('https://blog.example.com/my-hackathon')!;
+    expect(classifyUrl(page).kind).toBe('page');
+    expect(originsFor(page)).toEqual(['https://blog.example.com/*']);
+    expect(originsFor(asUrl('https://github.com/Zidarc')!)).toEqual([]);
   });
 });

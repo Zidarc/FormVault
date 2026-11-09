@@ -133,6 +133,13 @@ export async function importAny(file: File, onProgress?: ImportProgress): Promis
 
 export function htmlToText(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  doc.querySelectorAll('script,style,noscript').forEach((n) => n.remove());
-  return (doc.body?.innerText || doc.body?.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+  doc.querySelectorAll('script,style,noscript,svg,nav,footer,header,form,iframe').forEach((n) => n.remove());
+  // A parsed document has no layout, so put the line breaks back by hand.
+  doc.querySelectorAll('p,div,li,h1,h2,h3,h4,h5,h6,tr,section,article,blockquote,pre').forEach((n) => n.append('\n'));
+  doc.querySelectorAll('br').forEach((n) => n.replaceWith('\n'));
+  return (doc.body?.textContent ?? '')
+    .replace(/[ \t ]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }

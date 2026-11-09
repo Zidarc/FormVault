@@ -5,6 +5,7 @@ import { useSyncExternalStore } from 'react';
 import { onRateLimitWait } from '@/lib/ai/providers';
 import { importAny } from '@/lib/import/route';
 import { importPasted } from '@/lib/import/resume';
+import { importUrl } from '@/lib/import/url';
 
 export interface Job {
   id: number;
@@ -15,12 +16,15 @@ export interface Job {
   progress?: string;
   result?: string;
   found?: number;
+  /** Skipped because the same file was imported before */
+  skipped?: boolean;
 }
 
-type Work = (p: (msg: string) => void) => Promise<{ text: string; found: number }>;
+type Work = (p: (msg: string) => void, force: boolean) => Promise<{ text: string; found: number; skipped?: boolean }>;
 
 let jobs: Job[] = [];
 const work = new Map<number, Work>();
+const forced = new Set<number>();
 const listeners = new Set<() => void>();
 let nextId = 1;
 let running = false;
@@ -43,12 +47,13 @@ async function pump() {
   try {
     for (let job = jobs.find((j) => j.status === 'waiting'); job; job = jobs.find((j) => j.status === 'waiting')) {
       const id = job.id;
-      patch(id, { status: 'working', progress: 'Starting…' });
+      const force = forced.delete(id);
+      patch(id, { status: 'working', progress: 'Starting…', skipped: false });
       onRateLimitWait((s) => patch(id, { progress: `The free AI tier is busy — trying again in ${s}s…` }));
       try {
-        const r = await work.get(id)!((m) => patch(id, { progress: m }));
-        patch(id, { status: 'done', result: r.text, found: r.found, progress: undefined });
-        work.delete(id);
+        const r = await work.get(id)!((m) => patch(id, { progress: m }), force);
+        patch(id, { status: 'done', result: r.text, found: r.found, skipped: r.skipped, progress: undefined });
+        if (!r.skipped) work.delete(id); // a skipped file can still be imported anyway
       } catch (e) {
         // Keep the work so "Try again" can rerun it.
         patch(id, { status: 'error', result: e instanceof Error ? e.message : String(e), progress: undefined });
@@ -67,14 +72,55 @@ function add(name: string, fn: Work, thumb?: string) {
   void pump();
 }
 
+// Remember what was imported so dropping the same export twice doesn't spend AI quota again.
+const SEEN_KEY = 'importedFiles';
+type Seen = Record<string, { name: string; at: string }>;
+
+async function fileHash(f: Blob) {
+  const d = await crypto.subtle.digest('SHA-256', await f.arrayBuffer());
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function seenFiles(): Promise<Seen> {
+  return ((await browser.storage.local.get(SEEN_KEY))[SEEN_KEY] as Seen) ?? {};
+}
+
+async function markSeen(hash: string, name: string) {
+  const seen = await seenFiles();
+  seen[hash] = { name, at: new Date().toISOString() };
+  const keep = Object.entries(seen).sort((a, b) => b[1].at.localeCompare(a[1].at)).slice(0, 500);
+  await browser.storage.local.set({ [SEEN_KEY]: Object.fromEntries(keep) });
+}
+
 export function enqueueFiles(files: File[]) {
   for (const f of files) {
     const thumb = f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined;
-    add(f.name || 'Pasted image', async (p) => {
+    add(f.name || 'Pasted image', async (p, force) => {
+      const hash = await fileHash(f);
+      const before = (await seenFiles())[hash];
+      if (before && !force)
+        return { text: `Already imported on ${new Date(before.at).toLocaleDateString()} — skipped.`, found: 0, skipped: true };
       const r = await importAny(f, p);
+      await markSeen(hash, f.name);
       return { text: `${r.what} — ${foundText(r.found)}.${r.note ? ' ' + r.note : ''}`, found: r.found };
     }, thumb);
   }
+}
+
+/** A pasted link. Ask for any site permission in the click, before calling this. */
+export function enqueueUrl(u: URL) {
+  add(u.hostname + u.pathname.replace(/\/$/, ''), async (p) => {
+    const r = await importUrl(u, p);
+    return { text: `${r.what} — ${foundText(r.found)}.${r.note ? ' ' + r.note : ''}`, found: r.found };
+  });
+}
+
+/** Import a skipped duplicate anyway. */
+export function importAnyway(id: number) {
+  if (!work.has(id)) return;
+  forced.add(id);
+  patch(id, { status: 'waiting', result: undefined, skipped: false });
+  void pump();
 }
 
 export function enqueueText(text: string) {
