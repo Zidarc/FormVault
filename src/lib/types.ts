@@ -68,6 +68,8 @@ export interface Hackathon extends EntryBase {
   date?: string;
   team: string[];
   projectId?: string;
+  /** Project name as found in the source; resolved to projectId when that project is in the vault */
+  projectTitle?: string;
   result?: string;
   postUrl?: string;
 }
