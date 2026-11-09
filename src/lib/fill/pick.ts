@@ -67,7 +67,7 @@ export function candidates(vault: Vault, section: PickSection, question: string)
   return rankBySimilarity(question, list, (e) => entryText(vault, section, e).text).map(({ item, score }) => {
     const t = entryText(vault, section, item);
     // Winners and recent entries float up a little
-    const bonus = (/(won|winner|1st|first|2nd|second|3rd|prize|finalist)/i.test(t.sub) ? 0.05 : 0) + (item.updatedAt ? 0 : 0);
+    const bonus = /(won|winner|1st|first|2nd|second|3rd|prize|finalist)/i.test(t.sub) ? 0.05 : 0;
     return { id: item.id, title: t.title, sub: t.sub, score: score + bonus };
   }).sort((a, b) => b.score - a.score);
 }
