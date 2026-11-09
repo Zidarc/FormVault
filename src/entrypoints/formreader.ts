@@ -208,11 +208,50 @@ export default defineUnlistedScript(() => {
     return out;
   }
 
+  // ── Custom widgets built from ARIA roles (Typeform, Tally, many React UI kits) ──
+  function scanAria(): ScannedField[] {
+    const out: ScannedField[] = [];
+    const groups = new Map<Element, { role: 'radio' | 'checkbox'; els: HTMLElement[] }>();
+    for (const el of deepAll<HTMLElement>(document, '[role="radio"], [role="checkbox"], [role="menuitemradio"]')) {
+      if (el.matches('input') || el.querySelector('input[type="radio"],input[type="checkbox"]') || !visible(el) || el.closest('[data-formvault-ui]')) continue;
+      const role = el.getAttribute('role') === 'checkbox' ? 'checkbox' : 'radio';
+      const g = el.closest('[role="radiogroup"],[role="group"],[role="listbox"],fieldset') ?? el.parentElement?.parentElement ?? el.parentElement;
+      if (!g) continue;
+      const entry = groups.get(g) ?? { role, els: [] };
+      entry.els.push(el);
+      groups.set(g, entry);
+    }
+    for (const [g, { role, els }] of groups) {
+      const options = els.map((el) => ({ label: clean(el.getAttribute('aria-label') ?? el.innerText), el })).filter((o) => o.label);
+      if (!options.length) continue;
+      const question = clean(g.getAttribute('aria-label')) || (g.getAttribute('aria-labelledby') ? labelFor(g as HTMLElement) : '') || labelFor(g as HTMLElement);
+      const on = options.filter((o) => o.el.getAttribute('aria-checked') === 'true').map((o) => o.label);
+      out.push(
+        add(
+          { kind: role, question: question || 'Choose', required: g.getAttribute('aria-required') === 'true', options: options.map((o) => o.label), currentValue: role === 'radio' ? on[0] : on },
+          { kind: role, options, gf: true },
+        ),
+      );
+    }
+    // Custom dropdowns
+    for (const box of deepAll<HTMLElement>(document, '[role="combobox"][aria-haspopup="listbox"], [role="button"][aria-haspopup="listbox"]')) {
+      if (!visible(box) || box.matches('input') || box.closest('[data-formvault-ui]')) continue;
+      out.push(add({ kind: 'select', question: labelFor(box), required: box.getAttribute('aria-required') === 'true', options: [] }, { kind: 'select', el: box, gf: true }));
+    }
+    return out;
+  }
+
   function scan() {
     targets.clear();
     document.querySelectorAll('[data-formvault]').forEach((e) => e.removeAttribute('data-formvault'));
     const isGoogleForm = location.hostname === 'docs.google.com' && location.pathname.includes('/forms/');
-    const fields = isGoogleForm ? scanGoogleForm() : scanGeneric();
+    const fields = isGoogleForm ? scanGoogleForm() : [...scanGeneric(), ...scanAria()];
+    // Page order
+    const elOf = (id: string) => {
+      const t = targets.get(id)!;
+      return 'el' in t ? t.el : t.options[0].el;
+    };
+    fields.sort((a, b) => (elOf(a.id).compareDocumentPosition(elOf(b.id)) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
     return { url: location.href, title: document.title, fields: fields.filter((f) => f.question || f.options?.length), isGoogleForm };
   }
 

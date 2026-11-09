@@ -118,7 +118,7 @@ function DraftCard({
 
       {d.origin !== 'skip' && (!d.pick || d.pick.chosen) && (
         <>
-          {f.kind === 'checkbox' && f.options ? (
+          {f.kind === 'checkbox' && f.options?.length ? (
             <div className="stack" style={{ gap: 4 }}>
               {f.options.map((o) => {
                 const cur = Array.isArray(d.answer) ? d.answer : [];
@@ -135,7 +135,7 @@ function DraftCard({
                 );
               })}
             </div>
-          ) : (f.kind === 'select' || f.kind === 'radio') && f.options ? (
+          ) : (f.kind === 'select' || f.kind === 'radio') && f.options?.length ? (
             <select value={String(d.answer)} onChange={(e) => onChange({ answer: e.target.value, approved: !!e.target.value })}>
               <option value="">— choose —</option>
               {f.options.map((o) => (
