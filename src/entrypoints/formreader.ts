@@ -346,7 +346,7 @@ export default defineUnlistedScript(() => {
         const on = t.options.filter((o) => (t.gf ? o.el.getAttribute('aria-checked') === 'true' : (o.el as HTMLInputElement).checked)).map((o) => o.label);
         out[id] = t.kind === 'radio' ? on[0] ?? '' : on;
       } else if (t.kind === 'contenteditable') out[id] = t.el.innerText;
-      else if ('value' in t.el) out[id] = (t.el as HTMLInputElement).value;
+      else if ('value' in (t as { el: HTMLElement }).el) out[id] = ((t as { el: HTMLElement }).el as HTMLInputElement).value;
     }
     return out;
   }
